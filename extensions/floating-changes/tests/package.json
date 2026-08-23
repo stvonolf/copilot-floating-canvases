@@ -1,0 +1,12 @@
+{
+  "name": "floating-changes-tests",
+  "version": "1.0.0",
+  "description": "Behavioural tests for the floating-changes extension",
+  "private": true,
+  "scripts": {
+    "test": "node suite.mjs"
+  },
+  "dependencies": {
+    "playwright": "^1.62.1"
+  }
+}

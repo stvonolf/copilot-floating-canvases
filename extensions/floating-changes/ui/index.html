@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Changes</title>
+        <link rel="stylesheet" href="/styles.css" />
+    </head>
+    <body>
+        <header class="toolbar">
+            <div class="identity">
+                <strong id="repository">Changes</strong>
+                <span id="branch" class="branch"></span>
+                <span id="sync" class="sync"></span>
+            </div>
+            <span class="spacer"></span>
+            <span id="summary" class="summary"></span>
+            <button id="refresh" class="button" type="button">Refresh</button>
+            <button id="popout" class="button" type="button">Pop out</button>
+            <button id="popin" class="button" type="button" hidden>Pop back in</button>
+        </header>
+
+        <main class="layout">
+            <aside class="sidebar">
+                <div class="filter-wrap">
+                    <input id="filter" class="filter" type="search" placeholder="Filter files" autocomplete="off" />
+                </div>
+                <div id="changes" class="changes"></div>
+            </aside>
+            <section class="diff-pane">
+                <header id="diff-header" class="diff-header" hidden>
+                    <div class="diff-title-wrap">
+                        <strong id="diff-title" class="diff-title"></strong>
+                        <span id="diff-kind" class="diff-kind"></span>
+                    </div>
+                    <div id="diff-tabs" class="diff-tabs"></div>
+                </header>
+                <div id="diff" class="diff">
+                    <div class="placeholder">Select a changed file to view its diff.</div>
+                </div>
+            </section>
+        </main>
+
+        <div id="floating-overlay" class="overlay" hidden>
+            <div class="overlay-card">
+                <h2>Changes moved to a floating window</h2>
+                <p>Put the floating window on another monitor, or bring it back here.</p>
+                <button id="bring-back" class="button primary" type="button">Bring it back</button>
+            </div>
+        </div>
+
+        <div id="error-overlay" class="overlay" hidden>
+            <div class="overlay-card error-card">
+                <h2>Can't load changes</h2>
+                <pre id="error-message"></pre>
+                <button id="retry" class="button" type="button">Retry</button>
+            </div>
+        </div>
+
+        <script src="/app.js"></script>
+    </body>
+</html>

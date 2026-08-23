@@ -1,0 +1,13 @@
+{
+  "name": "tests",
+  "version": "1.0.0",
+  "description": "Behavioural test suite for the floating-terminal extension",
+  "private": true,
+  "dependencies": {
+    "playwright": "^1.62.1"
+  },
+  "scripts": {
+    "test": "node suite.mjs",
+    "test:reaper": "node reaper.mjs"
+  }
+}

@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Terminal</title>
+        <link rel="stylesheet" href="/vendor/xterm.css" />
+        <link rel="stylesheet" href="/styles.css" />
+    </head>
+    <body>
+        <header class="toolbar">
+            <span class="title" id="title">Terminal</span>
+            <span class="badge" id="badge" hidden></span>
+            <span class="spacer"></span>
+            <button id="popout" class="button" type="button" title="Move this terminal to a floating window">
+                Pop out
+            </button>
+            <button id="popin" class="button" type="button" hidden title="Close this window and return the terminal to the panel">
+                Pop back in
+            </button>
+        </header>
+
+        <main class="surface">
+            <div id="terminal" class="terminal-host"></div>
+
+            <div id="overlay" class="overlay" hidden>
+                <div class="overlay-card">
+                    <h2>Moved to a floating window</h2>
+                    <p>
+                        This terminal is now running in its own window — check your other monitor. The panel is just a
+                        placeholder until you bring it back.
+                    </p>
+                    <button id="bring-back" class="button primary" type="button">Bring it back here</button>
+                </div>
+            </div>
+
+            <div id="notice" class="overlay" hidden>
+                <div class="overlay-card">
+                    <h2>Can't start a terminal</h2>
+                    <p id="notice-text" class="notice-text"></p>
+                </div>
+            </div>
+        </main>
+
+        <script src="/vendor/xterm.js"></script>
+        <script src="/vendor/addon-fit.js"></script>
+        <script src="/app.js"></script>
+    </body>
+</html>
