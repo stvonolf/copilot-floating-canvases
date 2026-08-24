@@ -18,7 +18,7 @@
 // Windows PowerShell 5.1 is refused: its PSReadLine 2.0 loses the prompt
 // position on routine resizes and has no silent recovery.
 
-import { existsSync } from "node:fs";
+import { existsSync, lstatSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -59,6 +59,23 @@ async function loadPty() {
     return ptyModule;
 }
 
+/**
+ * Whether an executable path is present.
+ *
+ * The Microsoft Store build of PowerShell 7 is only reachable through the App
+ * Execution Alias in WindowsApps, which is an APPEXECLINK reparse point.
+ * `existsSync` resolves it and fails with EACCES, so fall back to `lstatSync`,
+ * which reports the link itself without following it.
+ */
+function executableExists(candidate) {
+    if (existsSync(candidate)) return true;
+    try {
+        return lstatSync(candidate).isSymbolicLink();
+    } catch {
+        return false;
+    }
+}
+
 /** Locate PowerShell 7+, or null if it isn't installed. */
 function findPwsh() {
     if (process.platform !== "win32") return null;
@@ -71,7 +88,7 @@ function findPwsh() {
             path.join(pf, "PowerShell", "8", "pwsh.exe"),
             path.join(pf86, "PowerShell", "7", "pwsh.exe"),
             path.join(local, "Microsoft", "WindowsApps", "pwsh.exe"),
-        ].find((candidate) => existsSync(candidate)) ?? null
+        ].find((candidate) => executableExists(candidate)) ?? null
     );
 }
 
