@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>Plan Time Machine</title>
+  <link rel="stylesheet" href="/styles.css">
+  <script defer src="/vendor/marked.js"></script>
+  <script defer src="/vendor/purify.js"></script>
+  <script type="module" src="/app.js"></script>
+</head>
+<body>
+  <div class="panel">
+    <header class="header">
+      <span class="brand-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11a9 9 0 1 1 2.6 7M3 5v6h6"/><path d="M12 7v5l3 2"/></svg></span>
+      <h1>Plan Time Machine</h1>
+      <button class="icon-button" id="refresh" aria-label="Refresh plan history" title="Refresh plan history"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M6 7a7 7 0 0 1 12-1l2 6M4 12l2 6a7 7 0 0 0 12-1"/></svg></button>
+      <div class="settings">
+        <button class="icon-button" id="theme-trigger" aria-label="Appearance: System" aria-expanded="false" aria-controls="theme-options" title="Appearance: System"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.7 13A9 9 0 0 1 11 3.3 9 9 0 1 0 20.7 13Z"/></svg></button>
+        <div class="popover" id="theme-options" aria-label="Appearance" hidden>
+          <div class="caption">Appearance</div>
+          <button class="theme-choice" data-theme-option="light" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/></svg><span>Light</span><b class="theme-check" aria-hidden="true">&#10003;</b></button>
+          <button class="theme-choice" data-theme-option="dark" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.7 13A9 9 0 0 1 11 3.3 9 9 0 1 0 20.7 13Z"/></svg><span>Dark</span><b class="theme-check" aria-hidden="true">&#10003;</b></button>
+          <button class="theme-choice" data-theme-option="system" aria-pressed="true"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8m-4-4v4"/></svg><span>System</span><b class="theme-check" aria-hidden="true">&#10003;</b></button>
+        </div>
+      </div>
+    </header>
+
+    <p class="storage-warning" id="storage-warning" role="status" hidden></p>
+
+    <section class="context" aria-label="Tracked native plan">
+      <h2 id="plan-title">Native session plan</h2>
+      <div class="file-meta">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6M8 13h8M8 17h6"/></svg>
+        <code id="plan-file">plan.md</code><span class="separator">&middot;</span><span>Native session plan</span>
+      </div>
+    </section>
+
+    <main class="content">
+      <section class="error-banner" id="error-banner" role="alert" hidden>
+        <h2 id="error-title">Unable to read plan history</h2>
+        <p id="error-message"></p>
+        <code class="error-code" id="error-code" hidden></code>
+        <button class="text-button" id="retry">Retry / Refresh</button>
+      </section>
+      <p class="status-banner" id="status-banner" role="status" hidden></p>
+
+      <div id="history-area" hidden>
+        <div class="revision-bar">
+          <button class="history-trigger" id="history-trigger" aria-expanded="false" aria-controls="history"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="5" r="2"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="7" r="2"/><path d="M6 7v10M18 9v1a5 5 0 0 1-5 5H6"/></svg><span id="position">Saved revisions</span><svg class="chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+          <div class="nav-buttons">
+            <button class="icon-button" id="previous" aria-label="Previous revision" title="Previous revision" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 6-6 6 6 6"/></svg></button>
+            <button class="icon-button" id="next" aria-label="Next revision" title="Next revision" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m10 6 6 6-6 6"/></svg></button>
+          </div>
+        </div>
+        <nav id="history" class="history" aria-label="Plan revisions and working changes" hidden></nav>
+        <div class="history-error" id="history-error" role="alert" hidden></div>
+      </div>
+
+      <section class="empty-state" id="empty-state" role="status">
+        <h2 id="empty-title">Connecting to local plan history</h2>
+        <p id="empty-message">Reading this session's native plan.</p>
+      </section>
+
+      <section id="revision" aria-label="Selected revision" hidden>
+        <h2 class="revision-heading" id="revision-title"></h2>
+        <div class="revision-meta">
+          <code id="revision-hash"></code><span class="separator" id="time-separator" hidden>&middot;</span><time id="revision-time" hidden></time>
+          <span class="badge" id="latest-badge" hidden></span>
+          <button class="text-button" id="jump-latest" hidden>View working changes</button>
+        </div>
+        <div class="capture-controls" id="capture-controls" hidden>
+          <span id="capture-status"></span>
+          <button class="text-button" id="capture" title="Save a local plan snapshot, not an application code commit">Capture now</button>
+        </div>
+        <div class="tabs" aria-label="Revision view">
+          <button class="tab active" data-view="diff" aria-pressed="true" aria-controls="document">Changes</button>
+          <button class="tab" data-view="plan" aria-pressed="false" aria-controls="document">Full plan</button>
+        </div>
+        <section id="document" aria-label="Revision content" aria-busy="false"></section>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-row">
+        <span>Read-only plan &middot; Local snapshots</span>
+        <button class="text-button info-trigger" id="info-trigger" aria-expanded="false" aria-controls="info">How it fits</button>
+      </div>
+      <div class="info" id="info" hidden>
+        <div class="flow"><span>Plan</span><span>&rarr;</span><span>Refine</span><span>&rarr;</span><span class="here">Browse history</span><span>&rarr;</span><span>Build &amp; review</span></div>
+        <p>Keep using Copilot's native Plan mode and approval flow. This panel reads your native plan; it never edits or approves it.</p>
+        <p><strong>Working changes</strong> compare the current plan file with its latest saved revision. Snapshots are captured after <span id="capture-delay">5 seconds</span> without edits. <strong>Capture now</strong> saves a snapshot immediately.</p>
+        <p>Snapshots live in extension-owned local history, not application code commits. Plan contents stay on this machine. Images and raw HTML are not rendered; links open only when you choose them.</p>
+      </div>
+    </footer>
+  </div>
+</body>
+</html>

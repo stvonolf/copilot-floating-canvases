@@ -1,0 +1,14 @@
+{
+  "name": "copilot-plan-time-machine",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Read-only native plan tracking and persistent plan-only revision history for Copilot.",
+  "dependencies": {
+    "dompurify": "^3.4.15",
+    "marked": "^18.0.12"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

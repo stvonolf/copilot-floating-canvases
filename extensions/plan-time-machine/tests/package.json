@@ -1,0 +1,13 @@
+{
+  "name": "plan-time-machine-tests",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test core.test.mjs",
+    "test:ui": "node ui.test.mjs"
+  },
+  "dependencies": {
+    "playwright": "^1.63.0"
+  }
+}
