@@ -6,7 +6,7 @@
         <title>Changes</title>
         <link rel="stylesheet" href="/styles.css" />
     </head>
-    <body>
+    <body data-view="git">
         <header class="toolbar">
             <div class="identity">
                 <strong id="repository">Changes</strong>
@@ -20,10 +20,32 @@
             <button id="popin" class="button" type="button" hidden>Pop back in</button>
         </header>
 
+        <nav class="view-switcher" aria-label="Change source">
+            <button id="git-mode" class="mode-tab active" type="button" aria-pressed="true">Git changes</button>
+            <button id="review-mode" class="mode-tab" type="button" aria-pressed="false">Since you looked</button>
+        </nav>
+
+        <section id="review-controls" class="review-controls" aria-label="Review checkpoint" hidden>
+            <div class="checkpoint-row">
+                <div class="checkpoint-label">
+                    <span class="eyebrow">Reviewed baseline</span>
+                    <time id="review-checkpoint">No baseline yet</time>
+                </div>
+                <button id="mark-reviewed" class="button primary" type="button" disabled>Mark all reviewed</button>
+            </div>
+            <p id="review-intro" class="review-intro">
+                Review existing Git changes first. Then explicitly mark the current files reviewed to start tracking.
+                Opening this view never marks anything reviewed.
+            </p>
+            <p class="review-scope-note">Marks the full working tree, including filtered-out files. Does not resolve feedback.</p>
+            <div id="review-loading" class="review-loading" role="status" hidden></div>
+            <div id="review-message" class="review-message" role="status" hidden></div>
+        </section>
+
         <main class="layout">
-            <aside class="sidebar">
+            <aside class="sidebar" aria-label="Changed files">
                 <div class="filter-wrap">
-                    <input id="filter" class="filter" type="search" placeholder="Filter files" autocomplete="off" />
+                    <input id="filter" class="filter" type="search" placeholder="Filter files" aria-label="Filter files" autocomplete="off" />
                 </div>
                 <div id="changes" class="changes"></div>
             </aside>
@@ -38,6 +60,26 @@
                 <div id="diff" class="diff">
                     <div class="placeholder">Select a changed file to view its diff.</div>
                 </div>
+
+                <section id="review-feedback" class="review-feedback" aria-label="File feedback" hidden>
+                    <header class="feedback-header">
+                        <strong>Feedback</strong>
+                        <div class="feedback-tabs" role="group" aria-label="Feedback scope">
+                            <button id="feedback-file" class="feedback-tab active" type="button" aria-pressed="true">This file</button>
+                            <button id="feedback-all" class="feedback-tab" type="button" aria-pressed="false">All feedback</button>
+                        </div>
+                    </header>
+                    <form id="feedback-form" class="feedback-form">
+                        <label for="feedback-text">File-level note <span id="feedback-path" class="feedback-path"></span></label>
+                        <textarea id="feedback-text" class="feedback-text" rows="2" maxlength="2000"
+                            placeholder="What needs attention in this file?" aria-describedby="feedback-hint" disabled></textarea>
+                        <div class="feedback-form-footer">
+                            <span id="feedback-hint" class="feedback-hint">Select a changed file to add feedback.</span>
+                            <button id="feedback-submit" class="button" type="submit" disabled>Add feedback</button>
+                        </div>
+                    </form>
+                    <div id="feedback-list" class="feedback-list"></div>
+                </section>
             </section>
         </main>
 

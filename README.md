@@ -5,7 +5,7 @@ Three experimental canvas extensions for the GitHub Copilot app:
 | Extension | Description |
 | --- | --- |
 | **Floating terminal** | A real PTY-backed terminal that can move between the Copilot panel and its own OS window. |
-| **Floating changes** | A read-only Git changes browser with staged, working-tree, untracked, and conflict groups plus unified diffs. |
+| **Floating changes** | Git diffs plus **Since You Looked** review checkpoints and persistent file feedback. Never changes your code or Git index. |
 | **Plan Time Machine** | A compact, read-only browser for the native plan's saved revisions and live working changes. |
 
 All three extensions run locally and bind their renderer to loopback only. Floating terminal and Floating changes can be moved to another monitor with **Pop out**.
@@ -97,7 +97,27 @@ The terminal is a live shell with the same permissions as the Copilot process.
 - Shows per-file addition/deletion totals
 - Switches between staged and working-tree diffs when a file has both
 - Polls for updates without resetting the diff scroll position
-- Is strictly read-only: it never stages, discards, or edits files
+- Never stages, discards, or edits working-tree files; review metadata is stored separately
+
+#### Since You Looked
+
+Choose **Since you looked** inside Floating changes to compare the current working files with your last explicit review checkpoint. The normal **Git changes** mode and pop-out controls remain available.
+
+1. Review your current work in **Git changes**, then switch to **Since you looked** and explicitly start a checkpoint from the current files. Opening the canvas never marks anything reviewed automatically.
+2. Continue developing. The review mode shows additions, edits, deletions, renames, and binary changes since that checkpoint, including edits to files that were clean when you started.
+3. Add file-level feedback as needed. Feedback stays open until you explicitly resolve it; **All feedback** keeps notes accessible even when the file is no longer in the delta.
+4. Select **Mark all reviewed** after reviewing the changes. This advances the checkpoint for the entire working tree, not just filtered or selected files, and does not resolve feedback.
+
+If files changed after the displayed view loaded, marking reviewed is rejected. Refresh and inspect the new changes before trying again. Diffs are tied to the displayed snapshot, so a selected diff never quietly changes its comparison inputs. Feedback records which file contents it referred to and warns when the file has changed since the comment; it does not claim the comment has been addressed.
+
+Checkpoints contain **tracked files plus non-ignored untracked files**. They represent working-file content, not staged versus unstaged layers: staging or committing unchanged content does not make it appear again. Ignored untracked files are excluded. Switching branches can produce a large delta, because branch contents changed; checkpoints are never silently reset. This feature does not automatically import native PR review comments or identify agent turn boundaries.
+
+Review snapshots and feedback are stored under `files/floating-changes-review/<repository-key>` in the SDK's session workspace. Both the panel and its floating window share that data; closing/reopening the panel or reloading the extension does not erase it. Different sessions and worktree roots are isolated. Git refs, index, configuration, and source files in your project are never modified. The private object store can retain previously inspected contents and is removed with the session's state; it is not pushed to GitHub. No remote services or model calls are needed.
+
+The current limits are **10,000 files, 16 MiB per file, and 256 MiB total**. Incomplete snapshots are refused rather than silently marked reviewed. Repositories with unresolved conflicts, submodules, or skip-worktree/sparse entries must use the normal Git view. Symlink targets are recorded as links rather than followed, and linked parent directories are not traversed. Native session storage must be available to use review mode.
+
+The agent can inspect review state and feedback through `get_review_status` and `get_review_diff`. Advancing checkpoints and resolving feedback are deliberately user controls, not agent-callable approval actions.
+To open directly in review mode, ask for Floating changes with `view: "review"`. Pop out preserves the active view.
 
 ### Plan Time Machine
 
@@ -147,6 +167,15 @@ npm test
 The terminal suite covers resize/cursor behavior, wrapped commands, panel and detached surfaces, pop-out lifecycle, and shell reaping.
 
 The changes suite creates isolated Git repositories and covers conflicts, staged and unstaged overlap, renames, deletions, untracked files, diff switching, polling, filtering, token isolation, pop-out lifecycle, and read-only guarantees.
+
+Run the review-mode suites from `extensions/floating-changes/tests`:
+
+```shell
+npm run test:review
+npm run test:review-ui
+```
+
+The review browser suite uses Microsoft Edge by default. Set `REVIEW_TEST_BROWSER=chromium` after `npx playwright install chromium` to use Playwright's Chromium. Fixtures are isolated from your real files and review checkpoints.
 
 Plan Time Machine has dependency-free backend tests and separate browser tests:
 

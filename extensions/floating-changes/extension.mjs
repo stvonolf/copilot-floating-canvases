@@ -11,6 +11,7 @@ import {
     releaseWorkspace,
     retainWorkspace,
     workspaceState,
+    reviewStore,
 } from "./server.mjs";
 
 const instances = new Map();
@@ -30,7 +31,7 @@ function workspaceFor(instanceId) {
 const changesCanvas = createCanvas({
     id: "floating-changes",
     displayName: "Floating changes",
-    description: "A read-only Git changes panel with file diffs that can pop out into its own OS window.",
+    description: "Git changes and Since You Looked review deltas with persistent feedback, in a panel or floating window.",
     inputSchema: {
         type: "object",
         properties: {
@@ -41,6 +42,10 @@ const changesCanvas = createCanvas({
             detached: {
                 type: "boolean",
                 description: "Open directly in a floating window.",
+            },
+            view: {
+                type: "string", enum: ["git", "review"],
+                description: "Open the normal Git view or Since You Looked review mode.",
             },
         },
         additionalProperties: false,
@@ -83,12 +88,36 @@ const changesCanvas = createCanvas({
             },
         },
         {
+            name: "get_review_status",
+            description: "Read differences since the user's last review checkpoint and persistent file feedback.",
+            handler: async (ctx) => {
+                try { return await (await reviewStore(workspaceFor(ctx.instanceId))).state(); }
+                catch (error) { throw canvasError(error); }
+            },
+        },
+        {
+            name: "get_review_diff",
+            description: "Read a file's exact diff in a review view returned by get_review_status.",
+            inputSchema: {
+                type: "object", properties: { path: { type: "string" }, viewId: { type: "string" } },
+                required: ["path", "viewId"], additionalProperties: false,
+            },
+            handler: async (ctx) => {
+                try { return await (await reviewStore(workspaceFor(ctx.instanceId))).diff(ctx.input.path, ctx.input.viewId); }
+                catch (error) { throw canvasError(error); }
+            },
+        },
+        {
             name: "detach",
             description: "Move the Changes panel into a floating OS window.",
+            inputSchema: {
+                type: "object", properties: { view: { type: "string", enum: ["git", "review"] } },
+                additionalProperties: false,
+            },
             handler: async (ctx) => {
                 try {
                     const { origin } = await ensureServer();
-                    return await detachWorkspace(workspaceFor(ctx.instanceId), origin);
+                    return await detachWorkspace(workspaceFor(ctx.instanceId), origin, ctx.input?.view ?? "git");
                 } catch (error) {
                     throw canvasError(error);
                 }
@@ -102,8 +131,9 @@ const changesCanvas = createCanvas({
     ],
     open: async (ctx) => {
         try {
-            const cwd = ctx.input?.cwd ?? ctx.session?.workingDirectory;
-            const workspace = await registerWorkspace(cwd);
+            await initialized;
+            const cwd = ctx.input?.cwd ?? ctx.session?.workingDirectory ?? process.cwd();
+            const workspace = await registerWorkspace(cwd, { sessionWorkspace: session.workspacePath });
             const { origin } = await ensureServer();
             const previous = instances.get(ctx.instanceId);
             if (previous !== workspace) {
@@ -112,12 +142,12 @@ const changesCanvas = createCanvas({
             }
             instances.set(ctx.instanceId, workspace);
 
-            if (ctx.input?.detached && !workspace.windowProcess) await detachWorkspace(workspace, origin);
+            if (ctx.input?.detached && !workspace.windowProcess) await detachWorkspace(workspace, origin, ctx.input?.view ?? "git");
 
             return {
                 title: "Changes",
                 status: workspace.root,
-                url: `${origin}/?w=${encodeURIComponent(workspace.token)}&mode=panel`,
+                url: `${origin}/?w=${encodeURIComponent(workspace.token)}&mode=panel&view=${ctx.input?.view ?? "git"}`,
             };
         } catch (error) {
             throw canvasError(error);
@@ -130,7 +160,9 @@ const changesCanvas = createCanvas({
     },
 });
 
-const session = await joinSession({ canvases: [changesCanvas] });
+let session;
+const initialized = joinSession({ canvases: [changesCanvas] }).then((joined) => { session = joined; });
+await initialized;
 const { port } = await ensureServer();
 try {
     await session.log(`floating-changes ready on 127.0.0.1:${port}`, { level: "info", ephemeral: true });

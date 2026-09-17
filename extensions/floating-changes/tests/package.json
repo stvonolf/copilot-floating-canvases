@@ -4,7 +4,9 @@
   "description": "Behavioural tests for the floating-changes extension",
   "private": true,
   "scripts": {
-    "test": "node suite.mjs"
+    "test": "node suite.mjs",
+    "test:review": "node --test review.test.mjs",
+    "test:review-ui": "node review-ui.mjs"
   },
   "dependencies": {
     "playwright": "^1.62.1"
