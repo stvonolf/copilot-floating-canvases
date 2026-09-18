@@ -6,9 +6,9 @@ Three experimental canvas extensions for the GitHub Copilot app:
 | --- | --- |
 | **Floating terminal** | A real PTY-backed terminal that can move between the Copilot panel and its own OS window. |
 | **Floating changes** | Git diffs plus **Since You Looked** review checkpoints and persistent file feedback. Never changes your code or Git index. |
-| **Plan Time Machine** | A compact, read-only browser for the native plan's saved revisions and live working changes. |
+| **Plan Time Machine** | A compact, read-only browser for native plan revisions and working changes, with a floating-window option. |
 
-All three extensions run locally and bind their renderer to loopback only. Floating terminal and Floating changes can be moved to another monitor with **Pop out**.
+All three extensions run locally, bind their renderer to loopback only, and can be moved to another monitor with **Pop out**.
 
 > [!NOTE]
 > Copilot's canvas extension API is experimental and may change between app releases.
@@ -19,6 +19,7 @@ All three extensions run locally and bind their renderer to loopback only. Float
 - Git
 - Node.js and npm, to install the terminal and Plan Time Machine runtime packages (Node.js 22+ for Plan Time Machine)
 - **Windows only:** [PowerShell 7](https://learn.microsoft.com/powershell/scripting/install/installing-powershell-on-windows)
+- **Plan Time Machine pop-out:** Chrome, Edge, Brave, or Chromium installed in a standard location
 
 The terminal intentionally refuses to use Windows PowerShell 5.1 because its old PSReadLine version loses the prompt cursor during terminal resizing.
 
@@ -79,7 +80,7 @@ Open floating changes.
 Open Plan Time Machine.
 ```
 
-For either floating canvas, select **Pop out** to move it into a separate window.
+Select **Pop out** in a canvas to move it into a separate window.
 
 ### Floating terminal
 
@@ -127,7 +128,11 @@ To open directly in review mode, ask for Floating changes with `view: "review"`.
 - Shows **Working changes** above saved revisions, exact diffs from each parent, full Markdown snapshots, and paginated older history.
 - Preserves the selected historical revision while the plan changes. Deleted plans leave saved history intact.
 - Uses a compact side-panel layout with light, dark, and system appearance.
+- **Pop out** opens a managed OS window with the selected revision, Changes/Full plan view, surrounding-context setting, scroll position, and appearance. **Bring back** (or closing the window) returns to the panel with the latest view selection.
+- The panel and floating window share one native plan tracker and history. Closing the panel does not interrupt an open floating window; extension shutdown or reload closes its owned window without deleting plan history.
 - Never modifies the native plan, your code, the application branch, or your Git configuration. Native plan approval remains in Copilot.
+
+Plan Time Machine manages at most one floating window per session. It uses a temporary, isolated browser profile and removes that profile after the window exits. A supported Chromium-based browser is required for pop-out so that the extension can reliably observe and close the window; if none is found, it reports an error and keeps the panel available instead of opening an unmanaged browser tab. The plan and saved revisions remain local.
 
 History lives in `files/plan-time-machine/history.git` inside the current SDK session workspace, alongside (not inside) the native `plan.md`. It survives panel closes and extension reloads in that session, but is not synchronized or committed to your project. Removing the session's state removes its history too. The extension cannot reconstruct revisions from before it began tracking or changes overwritten between its one-second polls.
 
@@ -135,7 +140,7 @@ Working changes are read from the native file, not a second editable plan. Pendi
 
 Plans must be regular UTF-8 files up to **1 MiB and 20,000 lines**. Unsupported files, unavailable Git, and read/capture errors are reported explicitly rather than showing a truncated plan as complete. When the runtime does not supply a session workspace, the extension reports that native plan tracking is unavailable.
 
-Agent-callable actions are `get_status`, `get_revision` (`id: "working"` or a full saved SHA), `get_history` (optional `before` cursor), and `capture_revision`. Canvas open input is `{}`.
+Agent-callable actions are `get_status`, `get_revision` (`id: "working"` or a full saved SHA), `get_history` (optional `before` cursor), `capture_revision`, `detach`, and `attach`. Canvas open input is `{}`, or `{ "detached": true }` to open directly in a floating window.
 
 ## Update
 
@@ -186,9 +191,12 @@ cd tests
 npm ci
 npm test
 npm run test:ui
+npm run test:popout
 ```
 
 The browser tests use installed Microsoft Edge by default. To use Playwright's Chromium instead, install it with `npx playwright install chromium` and set `PLAN_TEST_BROWSER=chromium`. The tests create isolated session fixtures; they never write a plan into your real session.
+
+`npm run test:popout` checks view handoff between isolated browser contexts, both return paths, failure recovery, and shared history. `npm run test:window` additionally opens real OS browser windows, verifies that their renderer connects, then checks pop-in, external exit, shutdown, and temporary-profile cleanup. The latter needs a desktop environment and one of the supported installed browsers.
 
 ## Repository layout
 

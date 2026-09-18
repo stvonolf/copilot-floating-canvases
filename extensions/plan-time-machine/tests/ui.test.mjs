@@ -10,6 +10,8 @@ const root = await mkdtemp(path.join(os.tmpdir(), "plan-time-machine-ui-"));
 const tracker = new PlanTracker(root, { captureDelayMs: 600000, pollMs: 100, onError: () => {} });
 let server;
 let browser;
+let page;
+const pageErrors = [];
 const first = "# Export plan\n\n## Access\nKeep regional access.\n\n## Delivery\nDownload immediately.\n";
 const second = first.replace("Download immediately.", "Queue a background job.");
 const third = second + "\n## Validation\nTest empty exports and retries.\n";
@@ -36,8 +38,7 @@ try {
     const browserName = process.env.PLAN_TEST_BROWSER ?? "msedge";
     if (!["msedge", "chromium"].includes(browserName)) throw new Error("PLAN_TEST_BROWSER must be msedge or chromium.");
     browser = await chromium.launch({ ...(browserName === "msedge" ? { channel: "msedge" } : {}), headless: true });
-    const page = await browser.newPage({ viewport: { width: 420, height: 900 }, colorScheme: "light" });
-    const pageErrors = [];
+    page = await browser.newPage({ viewport: { width: 420, height: 900 }, colorScheme: "light" });
     const remoteRequests = [];
     page.on("pageerror", (error) => pageErrors.push(error.message));
     page.on("request", (req) => {
@@ -169,6 +170,9 @@ try {
     assert.match(await unauthorized.locator("#error-message").textContent(), /token|authorized|reopen/i);
     await unauthorized.close();
     console.log("Passed real-server UI checks: waiting, captures, history pinning/pagination, exact snapshots, Markdown safety, responsive themes, missing/error recovery, and authorization.");
+} catch (error) {
+    console.error({ pageErrors, visibleError: page ? await page.locator("#error-message").textContent() : null });
+    throw error;
 } finally {
     await browser?.close();
     await server?.close();

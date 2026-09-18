@@ -15,6 +15,8 @@
     <header class="header">
       <span class="brand-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11a9 9 0 1 1 2.6 7M3 5v6h6"/><path d="M12 7v5l3 2"/></svg></span>
       <h1>Plan Time Machine</h1>
+      <button class="icon-button" id="popout" aria-label="Pop out plan history" title="Pop out plan history" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3h7v7M21 3l-9 9"/><path d="M10 5H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5"/></svg></button>
+      <button class="icon-button" id="popin" aria-label="Bring plan history back to the panel" title="Bring back to panel" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h12m-7-5-5 5 5 5"/><path d="M11 3h8a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-8"/></svg></button>
       <button class="icon-button" id="refresh" aria-label="Refresh plan history" title="Refresh plan history"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M6 7a7 7 0 0 1 12-1l2 6M4 12l2 6a7 7 0 0 0 12-1"/></svg></button>
       <div class="settings">
         <button class="icon-button" id="theme-trigger" aria-label="Appearance: System" aria-expanded="false" aria-controls="theme-options" title="Appearance: System"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.7 13A9 9 0 0 1 11 3.3 9 9 0 1 0 20.7 13Z"/></svg></button>
@@ -28,6 +30,7 @@
     </header>
 
     <p class="storage-warning" id="storage-warning" role="status" hidden></p>
+    <p class="window-error" id="window-error" role="alert" hidden></p>
 
     <section class="context" aria-label="Tracked native plan">
       <h2 id="plan-title">Native session plan</h2>
@@ -37,7 +40,13 @@
       </div>
     </section>
 
-    <main class="content">
+    <section class="floating-notice" id="floating-notice" aria-live="polite" hidden>
+      <h2 id="floating-title">Plan history is in a floating window</h2>
+      <p id="floating-message">Move the window to another monitor. It uses the same live plan and saved history.</p>
+      <button class="text-button" id="bring-back">Bring back to panel</button>
+    </section>
+
+    <main class="content" id="main-content">
       <section class="error-banner" id="error-banner" role="alert" hidden>
         <h2 id="error-title">Unable to read plan history</h2>
         <p id="error-message"></p>
@@ -82,7 +91,7 @@
       </section>
     </main>
 
-    <footer class="footer">
+    <footer class="footer" id="panel-footer">
       <div class="footer-row">
         <span>Read-only plan &middot; Local snapshots</span>
         <button class="text-button info-trigger" id="info-trigger" aria-expanded="false" aria-controls="info">How it fits</button>
@@ -92,6 +101,7 @@
         <p>Keep using Copilot's native Plan mode and approval flow. This panel reads your native plan; it never edits or approves it.</p>
         <p><strong>Working changes</strong> compare the current plan file with its latest saved revision. Snapshots are captured after <span id="capture-delay">5 seconds</span> without edits. <strong>Capture now</strong> saves a snapshot immediately.</p>
         <p>Snapshots live in extension-owned local history, not application code commits. Plan contents stay on this machine. Images and raw HTML are not rendered; links open only when you choose them.</p>
+        <p><strong>Pop out</strong> opens a separate Chrome, Edge, Brave, or Chromium window. Your selected revision, view, and appearance travel with it. Close it or choose <strong>Bring back</strong> to return to this panel. Keep the Copilot session running.</p>
       </div>
     </footer>
   </div>

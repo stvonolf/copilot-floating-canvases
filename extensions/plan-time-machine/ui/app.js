@@ -5,6 +5,10 @@ const validToken = /^[a-f0-9]{64}$/i.test(token);
 const revisionIdPattern = /^[a-f0-9]{40}$/i;
 const themeChoices = ["light", "dark", "system"];
 const osTheme = matchMedia("(prefers-color-scheme: dark)");
+const surfaceParams = new URLSearchParams(location.search);
+const isFloating = surfaceParams.get("surface") === "floating";
+const windowId = surfaceParams.get("window");
+root.dataset.surface = isFloating ? "floating" : "panel";
 
 let theme = "system";
 let state = null;
@@ -33,6 +37,14 @@ let pollTimer = null;
 let disposed = false;
 let requestQueue = Promise.resolve();
 let activeRequestController = null;
+let floatingState = null;
+let windowError = null;
+let movingWindow = false;
+let windowInitialized = false;
+let transferredTheme = null;
+let restoreScroll = null;
+let publishTimer = null;
+let publishedView = null;
 
 function make(tag, className, text) {
   const element = document.createElement(tag);
@@ -49,6 +61,15 @@ function setExpanded(trigger, target, expanded) {
 function showStorageWarning(message) {
   $("#storage-warning").textContent = message;
   $("#storage-warning").hidden = false;
+}
+
+function saveThemePreference() {
+  try {
+    localStorage.setItem("plan-time-machine-theme", theme);
+    $("#storage-warning").hidden = true;
+  } catch {
+    showStorageWarning("Appearance changed for this tab, but this browser cannot save the preference.");
+  }
 }
 
 try {
@@ -83,7 +104,7 @@ function applyTheme() {
   const appTheme = nativeTheme();
   root.dataset.appearance = theme;
   root.dataset.appTheme = String(appTheme !== null);
-  root.dataset.resolvedTheme = theme === "system" ? appTheme ?? (osTheme.matches ? "dark" : "light") : theme;
+  root.dataset.resolvedTheme = theme === "system" ? appTheme ?? (isFloating ? transferredTheme : null) ?? (osTheme.matches ? "dark" : "light") : theme;
   const name = theme[0].toUpperCase() + theme.slice(1);
   $("#theme-trigger").setAttribute("aria-label", `Appearance: ${name}`);
   $("#theme-trigger").title = `Appearance: ${name}`;
@@ -111,14 +132,10 @@ $("#theme-trigger").addEventListener("click", () => {
 document.querySelectorAll("[data-theme-option]").forEach((button) => button.addEventListener("click", () => {
   theme = button.dataset.themeOption;
   applyTheme();
-  try {
-    localStorage.setItem("plan-time-machine-theme", theme);
-    $("#storage-warning").hidden = true;
-  } catch {
-    showStorageWarning("Appearance changed for this tab, but this browser cannot save the preference.");
-  }
+  saveThemePreference();
   setExpanded("#theme-trigger", "#theme-options", false);
   $("#theme-trigger").focus();
+  scheduleViewPublish();
 }));
 document.addEventListener("click", (event) => {
   if (!event.target.closest(".settings")) setExpanded("#theme-trigger", "#theme-options", false);
@@ -148,7 +165,7 @@ function apiError(message, code = "REQUEST_FAILED", status = null) {
   return Object.assign(new Error(message), { code, status });
 }
 
-function request(path, { method = "GET", signal } = {}) {
+function request(path, { method = "GET", signal, body: requestBody } = {}) {
   // Serialize polling, navigation, pagination, and capture so responses cannot overtake each other.
   const operation = requestQueue.then(async () => {
     if (disposed || signal?.aborted) throw new DOMException("Request cancelled", "AbortError");
@@ -161,7 +178,8 @@ function request(path, { method = "GET", signal } = {}) {
     try {
       const response = await fetch(path, {
         method,
-        headers: { "X-Plan-Token": token, Accept: "application/json" },
+        headers: { "X-Plan-Token": token, Accept: "application/json", ...(requestBody === undefined ? {} : { "Content-Type": "application/json" }) },
+        ...(requestBody === undefined ? {} : { body: JSON.stringify(requestBody) }),
         cache: "no-store",
         credentials: "omit",
         mode: "same-origin",
@@ -228,6 +246,110 @@ function validateRevision(value, id) {
       value?.error?.code ?? "INVALID_RESPONSE");
   }
   return value;
+}
+
+function currentView() {
+  return {
+    selectedId, followLatest, view, showContext, theme,
+    resolvedTheme: root.dataset.resolvedTheme || "light",
+    scrollY: Math.min(10000000, Math.max(0, window.scrollY)),
+    historyOpen: !$("#history").hidden,
+  };
+}
+
+function restoreView(value) {
+  if (!value) return;
+  selectedId = value.selectedId;
+  followLatest = value.followLatest;
+  view = value.view;
+  showContext = value.showContext;
+  theme = value.theme;
+  transferredTheme = value.resolvedTheme;
+  restoreScroll = value.scrollY;
+  setExpanded("#history-trigger", "#history", value.historyOpen);
+  document.querySelectorAll("[data-view]").forEach((button) => {
+    const active = button.dataset.view === view;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", String(active));
+  });
+  renderedDocumentKey = null;
+  applyTheme();
+  saveThemePreference();
+}
+
+function renderWindow(value = floatingState) {
+  if (!value) return;
+  const previous = floatingState;
+  floatingState = value;
+  const active = value.status !== "attached";
+  const ownWindow = isFloating && value.id === windowId && active;
+  if (ownWindow && !windowInitialized) {
+    windowInitialized = true;
+    restoreView(value.view);
+    scheduleViewPublish();
+  } else if (!isFloating && previous && previous.status !== "attached" && !active) {
+    restoreView(value.view);
+    renderChrome({ history: true });
+    void ensureRevision();
+  }
+  const returned = isFloating && !ownWindow;
+  const away = !isFloating && active;
+  $("#popout").hidden = isFloating || active;
+  $("#popout").disabled = movingWindow || !state;
+  $("#popin").hidden = !ownWindow;
+  $("#popin").disabled = movingWindow || value.status !== "detached";
+  $("#floating-notice").hidden = !away && !returned;
+  $("#main-content").hidden = away || returned;
+  $("#panel-footer").hidden = away || returned;
+  $("#bring-back").hidden = !away;
+  $("#bring-back").disabled = movingWindow || value.status === "closing";
+  $("#floating-title").textContent = returned ? "Plan history returned to the panel"
+    : value.status === "opening" ? "Opening a floating window" : "Plan history is in a floating window";
+  $("#floating-message").textContent = returned ? "This window is no longer active. You can close it."
+    : "Move the window to another monitor. It uses the same live plan and saved history.";
+  const error = windowError ?? value.error;
+  $("#window-error").textContent = error?.message ?? error ?? "";
+  $("#window-error").hidden = !error;
+}
+
+function scheduleViewPublish() {
+  clearTimeout(publishTimer);
+  if (!isFloating || disposed || movingWindow || floatingState?.id !== windowId || floatingState?.status !== "detached") return;
+  publishTimer = setTimeout(async () => {
+    const value = currentView();
+    const serialized = JSON.stringify(value);
+    if (serialized === publishedView) return;
+    try {
+      await request("/api/window-view", { method: "POST", body: { windowId, view: value } });
+      publishedView = serialized;
+      windowError = null;
+    } catch (error) {
+      if (disposed) return;
+      windowError = error;
+    }
+    renderWindow();
+  }, 200);
+}
+
+async function moveWindow(detach) {
+  if (movingWindow) return;
+  movingWindow = true;
+  windowError = null;
+  clearTimeout(publishTimer);
+  renderWindow();
+  try {
+    const body = detach ? { view: currentView() }
+      : { windowId: isFloating ? windowId : floatingState?.id ?? null, ...(isFloating ? { view: currentView() } : {}) };
+    const result = await request(detach ? "/api/detach" : "/api/attach", { method: "POST", body });
+    renderWindow(result);
+    if (!detach && isFloating) window.close();
+  } catch (error) {
+    windowError = error;
+  } finally {
+    movingWindow = false;
+    renderWindow();
+    void refreshState();
+  }
 }
 
 function shortId(id) {
@@ -459,6 +581,7 @@ function renderDiff(value) {
     disclosure.addEventListener("toggle", () => {
       showContext = disclosure.open;
       target.classList.toggle("show-context", showContext);
+      scheduleViewPublish();
     });
     target.append(disclosure);
   }
@@ -585,6 +708,11 @@ function renderDocument() {
   try {
     target.replaceChildren(view === "diff" ? renderDiff(revision) : renderPlan(revision));
     renderedDocumentKey = documentKey;
+    if (restoreScroll !== null) {
+      const position = restoreScroll;
+      restoreScroll = null;
+      requestAnimationFrame(() => window.scrollTo({ top: position, behavior: "instant" }));
+    }
   } catch (error) {
     target.replaceChildren(revisionFailure(error));
     renderedDocumentKey = null;
@@ -642,6 +770,7 @@ function selectRevision(id, { follow = id === "working", closeHistory = true } =
   }
   renderChrome({ history: true });
   void ensureRevision();
+  scheduleViewPublish();
 }
 
 function applyState(value, forceRevision = false) {
@@ -650,6 +779,7 @@ function applyState(value, forceRevision = false) {
   if (state?.head !== value.head && !value.error && value.status !== "error") captureError = null;
   readError = null;
   state = value;
+  if (value.floating) renderWindow(value.floating);
   if (changed || recovered) rememberHistory(value.history);
   if (!changed && !recovered && !forceRevision) return;
   const target = latestTarget();
@@ -750,7 +880,10 @@ async function captureNow() {
   }
 }
 
-$("#history-trigger").addEventListener("click", () => setExpanded("#history-trigger", "#history", $("#history").hidden));
+$("#history-trigger").addEventListener("click", () => {
+  setExpanded("#history-trigger", "#history", $("#history").hidden);
+  scheduleViewPublish();
+});
 $("#previous").addEventListener("click", movePrevious);
 $("#next").addEventListener("click", () => {
   const ids = sequence();
@@ -759,6 +892,9 @@ $("#next").addEventListener("click", () => {
 });
 $("#jump-latest").addEventListener("click", () => selectRevision(latestTarget(), { follow: true }));
 $("#capture").addEventListener("click", captureNow);
+$("#popout").addEventListener("click", () => moveWindow(true));
+$("#popin").addEventListener("click", () => moveWindow(false));
+$("#bring-back").addEventListener("click", () => moveWindow(false));
 $("#refresh").addEventListener("click", () => refreshState(true));
 $("#retry").addEventListener("click", () => {
   captureError = null;
@@ -773,13 +909,16 @@ document.querySelectorAll("[data-view]").forEach((button) => button.addEventList
     tab.setAttribute("aria-pressed", String(active));
   });
   renderDocument();
+  scheduleViewPublish();
 }));
+window.addEventListener("scroll", scheduleViewPublish, { passive: true });
 document.addEventListener("visibilitychange", () => {
   if (!document.hidden) void refreshState();
 });
 window.addEventListener("pagehide", () => {
   disposed = true;
   clearTimeout(pollTimer);
+  clearTimeout(publishTimer);
   revisionController?.abort();
   activeRequestController?.abort();
 });

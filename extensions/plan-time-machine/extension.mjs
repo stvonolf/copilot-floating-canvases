@@ -10,6 +10,25 @@ let initializationError = null;
 const logError = (error) => process.stderr.write(`[plan-time-machine] ${error.code ?? "error"}: ${error.message ?? error}\n`);
 const noInput = { type: "object", properties: {}, additionalProperties: false };
 
+function ensureServer() {
+    if (!serverPromise) {
+        serverPromise = createPlanServer(tracker, { onError: logError, onWindowIdle: closeIfUnused }).catch((error) => {
+            serverPromise = null;
+            throw error;
+        });
+    }
+    return serverPromise;
+}
+
+async function closeIfUnused() {
+    const candidate = serverPromise;
+    if (instances.size || !candidate) return;
+    const server = await candidate;
+    if (instances.size || serverPromise !== candidate || server.floating.active) return;
+    serverPromise = null;
+    await server.close();
+}
+
 async function invoke(action) {
     try {
         await initialized;
@@ -23,14 +42,20 @@ async function invoke(action) {
 const canvas = createCanvas({
     id: "plan-time-machine",
     displayName: "Plan Time Machine",
-    description: "Read native plan history, compare revisions and working changes in a compact side panel.",
-    inputSchema: noInput,
+    description: "Read native plan history and working changes in a compact panel or floating OS window.",
+    inputSchema: {
+        type: "object", properties: { detached: { type: "boolean", description: "Open directly in a floating window." } },
+        additionalProperties: false,
+    },
     actions: [
         {
             name: "get_status",
             description: "Read native plan availability, pending changes, and the newest history page.",
             inputSchema: noInput,
-            handler: () => invoke((current) => current.refresh()),
+            handler: () => invoke(async (current) => ({
+                ...(await current.refresh()),
+                ...(serverPromise ? { floating: (await serverPromise).floating.state() } : {}),
+            })),
         },
         {
             name: "get_revision",
@@ -51,6 +76,18 @@ const canvas = createCanvas({
             handler: (ctx) => invoke((current) => current.list(ctx.input?.before)),
         },
         {
+            name: "detach",
+            description: "Open the same plan history in a floating OS window without changing the native plan.",
+            inputSchema: noInput,
+            handler: () => invoke(async () => (await ensureServer()).floating.detach()),
+        },
+        {
+            name: "attach",
+            description: "Close the floating window and return plan history to the side panel.",
+            inputSchema: noInput,
+            handler: () => invoke(async () => (await ensureServer()).floating.attach()),
+        },
+        {
             name: "capture_revision",
             description: "Capture the current plan in local history now, without modifying the native plan or the code repository.",
             inputSchema: noInput,
@@ -60,26 +97,18 @@ const canvas = createCanvas({
     open: async (ctx) => invoke(async () => {
         instances.add(ctx.instanceId);
         try {
-            if (!serverPromise) {
-                serverPromise = createPlanServer(tracker, { onError: logError }).catch((error) => {
-                    serverPromise = null;
-                    throw error;
-                });
-            }
-            const server = await serverPromise;
+            const server = await ensureServer();
+            if (ctx.input?.detached) await server.floating.detach();
             return { title: "Plan Time Machine", status: tracker.planPath, url: server.url };
         } catch (error) {
             instances.delete(ctx.instanceId);
+            await closeIfUnused();
             throw error;
         }
     }),
     onClose: async (ctx) => {
         instances.delete(ctx.instanceId);
-        if (!instances.size && serverPromise) {
-            const closing = serverPromise;
-            serverPromise = null;
-            await (await closing).close();
-        }
+        await closeIfUnused();
     },
 });
 
